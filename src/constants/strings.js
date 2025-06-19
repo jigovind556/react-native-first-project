@@ -1,0 +1,40 @@
+export default {
+  appName: 'First Project',
+  login: 'Login',
+  welcome: 'Welcome',
+  username: 'Username',
+  password: 'Password',
+  loginButton: 'Login',
+  errorLogin: 'Login failed. Please try again.',
+  welcomeMessage: 'Welcome, ',
+  backToLogin: 'Back to Login',
+  
+  // Forgot password strings
+  forgotPassword: 'Forgot Password',
+  email: 'Email',
+  sendOTP: 'Send OTP',
+  resetPassword: 'Reset Password',
+  enterOTP: 'Enter OTP',
+  newPassword: 'New Password',
+  confirmPassword: 'Confirm Password',
+  resetPasswordButton: 'Reset Password',
+  forgotPasswordLink: 'Forgot Password?',
+  otpSent: 'OTP sent to your email',
+  errorSendingOTP: 'Failed to send OTP. Please try again.',
+  passwordsDoNotMatch: 'Passwords do not match',
+  passwordResetSuccess: 'Password reset successful',
+  errorResetPassword: 'Failed to reset password. Please try again.',
+  
+  // Sign up strings
+  signup: 'Sign Up',
+  signupButton: 'Sign Up',
+  alreadyHaveAccount: 'Already have an account? Login',
+  noAccount: 'Don\'t have an account? Sign up',
+  signupSuccess: 'Registration successful! Please login.',
+  passwordResetSuccess: 'Password reset successful',
+  passwordsDoNotMatch: 'Passwords do not match',
+  otpSent: 'OTP sent to your email',
+  backToLogin: 'Back to Login',
+  errorSendingOTP: 'Failed to send OTP. Please try again.',
+  errorResetPassword: 'Failed to reset password. Please check your OTP and try again.'
+};
