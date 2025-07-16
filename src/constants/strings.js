@@ -31,6 +31,46 @@ export default {
   alreadyHaveAccount: 'Already have an account? Login',
   noAccount: 'Don\'t have an account? Sign up',
   signupSuccess: 'Registration successful! Please login.',
+  
+  // Dashboard strings
+  dashboard: 'Dashboard',
+  storeActivity: 'Store Activity',
+  paidVisibilityTracker: 'Paid Visibility Tracker',
+  captureEvidence: 'Capture Evidence',
+  elementName: 'Element Name:',
+  subTypeName: 'Sub Type Name:',
+  execution: 'Execution:',
+  planName: 'Plan Name:',
+  brandName: 'Brand Name:',
+  planEndDate: 'End:',
+  previous: 'Previous',
+  next: 'Next',
+  page: 'Page',
+  of: 'of',
+  noDataAvailable: 'No data available',
+  
+  // Evidence Capture Flow
+  performActivity: 'Perform Activity',
+  fillForm: 'Fill Form',
+  evidenceTags: 'Evidence Tags',
+  isValidEvidenceAvailable: 'Is Valid Evidence Available?',
+  yes: 'Yes',
+  no: 'No',
+  takePhoto: 'Take Photo',
+  chooseFromGallery: 'Choose from Gallery',
+  reason: 'Reason',
+  submit: 'Submit',
+  cancel: 'Cancel',
+  evidenceSubmitted: 'Evidence submitted successfully!',
+  reasonOptions: [
+    'Element Fixture Not Ready',
+    'Product Missing',
+    'Store Closed',
+    'No Access to Store',
+    'Other'
+  ],
+  
+  // Other strings
   passwordResetSuccess: 'Password reset successful',
   passwordsDoNotMatch: 'Passwords do not match',
   otpSent: 'OTP sent to your email',

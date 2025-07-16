@@ -27,10 +27,10 @@ const LoginScreen = ({ navigation }) => {
     try {
       const response = await loginUser(username, password);
       setLoading(false);
-      
+
       if (response.success) {
-        // Navigate to Welcome screen with the username
-        navigation.navigate('Welcome', { username: response.data.username });
+        // Navigate to Dashboard screen after successful login
+        navigation.navigate('Dashboard', { username: response.data.username });
       } else {
         Alert.alert('Error', strings.errorLogin);
       }
@@ -43,7 +43,7 @@ const LoginScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{strings.login}</Text>
-      
+
       <View style={styles.formContainer}>
         <TextInput
           style={styles.input}
@@ -52,7 +52,7 @@ const LoginScreen = ({ navigation }) => {
           onChangeText={setUsername}
           autoCapitalize="none"
         />
-        
+
         <TextInput
           style={styles.input}
           placeholder={strings.password}
@@ -60,8 +60,8 @@ const LoginScreen = ({ navigation }) => {
           onChangeText={setPassword}
           secureTextEntry
         />
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={styles.loginButton}
           onPress={handleLogin}
           disabled={loading}
@@ -72,14 +72,16 @@ const LoginScreen = ({ navigation }) => {
             <Text style={styles.buttonText}>{strings.loginButton}</Text>
           )}
         </TouchableOpacity>
-          <TouchableOpacity 
+        <TouchableOpacity
           style={styles.forgotPasswordButton}
           onPress={() => navigation.navigate('ForgotPassword')}
         >
-          <Text style={styles.forgotPasswordText}>{strings.forgotPasswordLink}</Text>
+          <Text style={styles.forgotPasswordText}>
+            {strings.forgotPasswordLink}
+          </Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={styles.signupButton}
           onPress={() => navigation.navigate('Signup')}
         >
@@ -132,7 +134,8 @@ const styles = StyleSheet.create({
   forgotPasswordButton: {
     marginTop: 15,
     alignSelf: 'center',
-  },  forgotPasswordText: {
+  },
+  forgotPasswordText: {
     color: colors.primary,
     fontSize: 14,
   },
