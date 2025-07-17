@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { logoutUser } from '../services/authService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import colors from '../constants/colors';
 import strings from '../constants/strings';
 
@@ -44,6 +46,57 @@ const DashboardScreen = ({ navigation }) => {
   
   // State for expanded items
   const [expandedItems, setExpandedItems] = useState({});
+  
+  // State to hold user data
+  const [userData, setUserData] = useState(null);
+  
+  // Get user data on component mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const userDataStr = await AsyncStorage.getItem('userData');
+        if (userDataStr) {
+          setUserData(JSON.parse(userDataStr));
+        }
+      } catch (error) {
+        console.error("Error loading user data:", error);
+      }
+    };
+    
+    fetchUserData();
+  }, []);
+  
+  // Handle logout
+  const handleLogout = async () => {
+    Alert.alert(
+      "Logout Confirmation",
+      "Are you sure you want to logout?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Logout",
+          onPress: async () => {
+            try {
+              const result = await logoutUser();
+              
+              if (result.success) {
+                // Navigate back to login screen
+                navigation.replace('Login');
+              } else {
+                Alert.alert("Error", "Failed to logout. Please try again.");
+              }
+            } catch (error) {
+              console.error("Error during logout:", error);
+              Alert.alert("Error", "Failed to logout. Please try again.");
+            }
+          }
+        }
+      ]
+    );
+  };
   
   // Get current data based on active tab
   const currentData = activeTab === 0 ? storeActivityData : paidVisibilityData;
@@ -141,7 +194,21 @@ const DashboardScreen = ({ navigation }) => {
   
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{strings.dashboard}</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>{strings.dashboard}</Text>
+        <TouchableOpacity 
+          style={styles.logoutButton}
+          onPress={handleLogout}
+        >
+          <Text style={styles.logoutButtonText}>{strings.logout || "Logout"}</Text>
+        </TouchableOpacity>
+      </View>
+      
+      {userData && (
+        <Text style={styles.welcomeMessage}>
+          Welcome, {userData.username || "User"}
+        </Text>
+      )}
       
       {/* Tab buttons */}
       <View style={styles.tabContainer}>
@@ -218,13 +285,34 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: colors.white,
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 40,
+    marginBottom: 10,
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginTop: 40,
-    marginBottom: 20,
-    textAlign: 'center',
     color: colors.primary,
+  },
+  logoutButton: {
+    backgroundColor: colors.secondary,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+  },
+  logoutButtonText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  welcomeMessage: {
+    fontSize: 16,
+    color: colors.grey,
+    marginBottom: 20,
+    textAlign: 'left',
   },
   tabContainer: {
     flexDirection: 'row',

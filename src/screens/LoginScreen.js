@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { loginUser } from '../services/authService';
+import { loginUser, checkAuthStatus } from '../services/authService';
 import colors from '../constants/colors';
 import strings from '../constants/strings';
 
@@ -16,6 +16,25 @@ const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+    // Check if user is already logged in on screen mount
+    const checkAuth = async () => {
+      try {
+        const authStatus = await checkAuthStatus();
+        
+        if (authStatus.isAuthenticated) {
+          // If already logged in, navigate to Dashboard
+          navigation.replace('Dashboard');
+        }
+      } catch (error) {
+        console.error('Authentication check error:', error);
+        // Continue showing login screen if there's an error
+      }
+    };
+    
+    checkAuth();
+  }, [navigation]);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -29,10 +48,11 @@ const LoginScreen = ({ navigation }) => {
       setLoading(false);
 
       if (response.success) {
-        // Navigate to Dashboard screen after successful login
-        navigation.navigate('Dashboard', { username: response.data.username });
+        // Navigate to Dashboard screen after successful login and replace the route
+        // so the user can't go back to the login screen using the back button
+        navigation.replace('Dashboard');
       } else {
-        Alert.alert('Error', strings.errorLogin);
+        Alert.alert('Error', response.error || strings.errorLogin);
       }
     } catch (error) {
       setLoading(false);

@@ -13,19 +13,23 @@ import EvidenceTagsScreen from '../screens/EvidenceTagsScreen';
 
 const Stack = createStackNavigator();
 
-const AppNavigator = () => {
+const AppNavigator = ({ isLoggedIn }) => {
   return (
     <Stack.Navigator 
-      initialRouteName="Login"
+      initialRouteName={isLoggedIn ? "Dashboard" : "Login"}
       screenOptions={{
         headerShown: false,
       }}
     >
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Welcome" component={WelcomeScreen} />
-      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
-      <Stack.Screen name="Signup" component={SignupScreen} />
+      {!isLoggedIn ? (
+        <>
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Welcome" component={WelcomeScreen} />
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+          <Stack.Screen name="Signup" component={SignupScreen} />
+        </>
+      ) : null}
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
       <Stack.Screen name="PerformActivity" component={PerformActivityScreen} />
       <Stack.Screen name="EvidenceTags" component={EvidenceTagsScreen} />

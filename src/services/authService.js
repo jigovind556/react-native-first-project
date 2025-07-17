@@ -1,5 +1,6 @@
 // API services for authentication
 import { apiFetch, setAuthData, clearAuthData, isAuthValid } from '../utils/apiFetch';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const loginUser = async (username, password) => {
   try {
@@ -12,39 +13,54 @@ export const loginUser = async (username, password) => {
     }, false); // Auth not required for login
     console.log(response);
     
-    if (response.success ) {
+    if (response.success) {
       // Set auth data for future requests
       const result = response.data.result;
       console.log(result);
+      
       if (!result || result.strOut === 'E') {
-        throw new Error('Invalid username or password');
+        return {
+          success: false,
+          error: 'Invalid username or password'
+        };
       }
-      await setAuthData(response.data.key, {
+      
+      // Get the authentication key from the response
+      const authToken = response.data.key;
+      
+      if (!authToken) {
+        return {
+          success: false,
+          error: 'Authentication token not received'
+        };
+      }
+      
+      // Store the auth data with user info and session
+      await setAuthData(authToken, {
         userData: {
-          username: result.username,
-          storecode: result.storecode,
-          // Add any other user data from response
+          username: result.username || username,
+          storecode: result.storecode || password,
         },
-        sessionId: response.data.sessionId || `session-${Date.now()}`,
       });
+      
+      return {
+        success: true,
+        data: {
+          username: result.username || username,
+        }
+      };
     }
-
-    // Since we're using a dummy endpoint, let's simulate a response
-    // In a real app, you'd parse the JSON from the actual response
-    // return {
-    //   success: true,
-    //   data: {
-    //     username: username,
-    //     token: 'dummy-token-12345',
-    //   }
-    // };
-    
-    return response;
+    else {
+      return {
+        success: false,
+        error: response.error || 'Login failed. Please try again.'
+      };
+    }
   } catch (error) {
     console.error('Login error:', error);
     return {
       success: false,
-      error: 'Network error. Please try again.',
+      error: error.message || 'Network error. Please try again.',
     };
   }
 };
@@ -89,6 +105,31 @@ export const resetPassword = async (email, otp, newPassword) => {
   }
 };
 
+// Check user authentication status
+export const checkAuthStatus = async () => {
+  try {
+    const isValid = await isAuthValid();
+    
+    if (isValid) {
+      // Get user data
+      const userDataStr = await AsyncStorage.getItem('userData');
+      const userData = userDataStr ? JSON.parse(userDataStr) : null;
+      
+      return {
+        isAuthenticated: true,
+        userData
+      };
+    }
+    
+    return { isAuthenticated: false };
+  } catch (error) {
+    console.error('Auth check error:', error);
+    return { isAuthenticated: false, error: error.message };
+  }
+};
+
+// This section intentionally left blank as the logoutUser function is defined later in the file
+
 // Register new user
 export const registerUser = async (username, email, password) => {
   try {
@@ -126,11 +167,17 @@ export const registerUser = async (username, email, password) => {
 // Logout user
 export const logoutUser = async () => {
   try {
-    const response = await apiFetch('logout', {
-      method: 'POST',
-    });
+    // Try to call logout API if available
+    try {
+      await apiFetch('logout', {
+        method: 'POST',
+      });
+    } catch (apiError) {
+      // Silently handle API errors during logout
+      console.warn('Logout API error:', apiError);
+    }
     
-    // Clear auth data regardless of response from server
+    // Clear auth data regardless of API response
     await clearAuthData();
     
     return {

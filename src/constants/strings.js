@@ -37,6 +37,7 @@ export default {
   storeActivity: 'Store Activity',
   paidVisibilityTracker: 'Paid Visibility Tracker',
   captureEvidence: 'Capture Evidence',
+  logout: 'Logout',
   elementName: 'Element Name:',
   subTypeName: 'Sub Type Name:',
   execution: 'Execution:',

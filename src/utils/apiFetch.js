@@ -1,6 +1,7 @@
 // Import dependencies
 import { API_BASE_URL } from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { loginUser } from '../services/authService';
 
 /**
  * Industry-grade fetch utility for making API requests
@@ -95,20 +96,6 @@ export const setAuthData = async (token, authData = {}) => {
     // Store token in AsyncStorage
     await AsyncStorage.setItem('authToken', token);
     
-    // Store session ID if provided
-    if (authData.sessionId) {
-      await AsyncStorage.setItem('sessionId', authData.sessionId);
-    }
-    
-    // Store expiry time if provided
-    if (authData.expires) {
-      await AsyncStorage.setItem('authExpiry', authData.expires.toString());
-    } else {
-      // Default expiry of 30 days
-      const expiry = Date.now() + 30 * 24 * 60 * 60 * 1000;
-      await AsyncStorage.setItem('authExpiry', expiry.toString());
-    }
-    
     // Store any additional auth data
     if (authData.userData) {
       await AsyncStorage.setItem('userData', JSON.stringify(authData.userData));
@@ -126,7 +113,7 @@ export const setAuthData = async (token, authData = {}) => {
 export const clearAuthData = async () => {
   try {
     // Remove all auth-related data from AsyncStorage
-    const authKeys = ['authToken', 'sessionId', 'authExpiry', 'userData'];
+    const authKeys = ['authToken', 'userData'];
     
     // Use Promise.all to remove all items in parallel
     await Promise.all(authKeys.map(key => AsyncStorage.removeItem(key)));
@@ -146,19 +133,27 @@ export const isAuthValid = async () => {
   try {
     // Check if token exists
     const token = await AsyncStorage.getItem('authToken');
+    console.log('Auth token:', token);
     if (!token) {
       return false;
     }
-    
-    // Check if token has expired
-    const expiryStr = await AsyncStorage.getItem('authExpiry');
-    if (expiryStr) {
-      const expiry = parseInt(expiryStr, 10);
-      if (Date.now() > expiry) {
-        // Token has expired, clear auth data
-        await clearAuthData();
-        return false;
-      }
+    // check if user data exists
+    const userData = await AsyncStorage.getItem('userData');
+    if (!userData) {
+      return false;
+    }
+    console.log(`User data found: ${userData}`);
+    // validate user data 
+    const parsedUserData = JSON.parse(userData);
+    console.log(`Parsed user data:`, parsedUserData);
+    if (!parsedUserData.username || !parsedUserData.storecode) {
+      return false;
+    }
+    const response = await loginUser(parsedUserData.username, parsedUserData.storecode);
+    console.log('Auth validity check response:', response);
+    if (!response.success) {
+      console.error('Authentication check failed:', response.error);
+      return false;
     }
     
     return true;
