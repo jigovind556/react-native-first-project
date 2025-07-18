@@ -28,11 +28,11 @@ export const apiFetch = async (endpoint, options = {}, requiresAuth = true) => {
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
         
-        // Add token to headers directly instead of using cookies
-        const sessionId = await AsyncStorage.getItem('sessionId');
-        if (sessionId) {
-          headers['Session-ID'] = sessionId;
-        }
+        // // Add token to headers directly instead of using cookies
+        // const sessionId = await AsyncStorage.getItem('sessionId');
+        // if (sessionId) {
+        //   headers['Session-ID'] = sessionId;
+        // }
       } else {
         console.warn('Authentication required but no token found');
       }

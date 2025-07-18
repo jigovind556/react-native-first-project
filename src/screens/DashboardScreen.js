@@ -12,29 +12,9 @@ import { logoutUser } from '../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import colors from '../constants/colors';
 import strings from '../constants/strings';
+import { getDashboardData, transformDashboardData } from '../services/dashboardService';
 
-// Mock data for Store Activity tab
-const storeActivityData = Array(25).fill(0).map((_, index) => ({
-  id: `sa-${index + 1}`,
-  elementName: `FS-${6217 + index}-STAPLES-FS${index + 1}`,
-  subTypeName: 'Floor Stack',
-  brandName: `Fortune & Kohinoor ${index % 3 === 0 ? 'Premium' : 'Standard'}`,
-  execution: index % 2 === 0 ? 'Monthly' : 'Quarterly',
-  planName: `Fortune_Kohinoor_FS_${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][index % 12]}25`,
-  planEndDate: `${index % 28 + 1}-${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][index % 12]}-2025`,
-}));
-
-// Mock data for Paid Visibility Tracker tab
-const paidVisibilityData = Array(18).fill(0).map((_, index) => ({
-  id: `pv-${index + 1}`,
-  elementName: `PV-${1234 + index}-METRO-PV${index + 1}`,
-  subTypeName: 'End Cap Display',
-  brandName: `Tropicana ${index % 2 === 0 ? 'Gold' : 'Select'}`,
-  execution: index % 3 === 0 ? 'Weekly' : (index % 3 === 1 ? 'Monthly' : 'Quarterly'),
-  planName: `Tropicana_EndCap_${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][index % 12]}25`,
-  planEndDate: `${index % 28 + 1}-${['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'][index % 12]}-2025`,
-}));
-
+// Number of items to show per page
 const ITEMS_PER_PAGE = 10;
 
 const DashboardScreen = ({ navigation }) => {
@@ -50,7 +30,16 @@ const DashboardScreen = ({ navigation }) => {
   // State to hold user data
   const [userData, setUserData] = useState(null);
   
-  // Get user data on component mount
+  // State for storing API data
+  const [storeActivityData, setStoreActivityData] = useState([]);
+  const [paidVisibilityData, setPaidVisibilityData] = useState([]);
+  
+  // Loading and error states
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // Get user data and activity data on component mount
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -64,7 +53,44 @@ const DashboardScreen = ({ navigation }) => {
     };
     
     fetchUserData();
+    fetchDashboardData();
   }, []);
+  
+  // Function to fetch dashboard data from API
+  const fetchDashboardData = async () => {
+    setIsLoading(true);
+    setErrorMessage('');
+    
+    try {
+      // Fetch both store activity and paid visibility data in one API call
+      const dashboardResponse = await getDashboardData();
+      
+      if (dashboardResponse.success) {
+        const { table, table1 } = dashboardResponse.data || { table: [], table1: [] };
+        
+        // Set paid visibility data (from table)
+        setPaidVisibilityData(transformDashboardData(table || []));
+        
+        // Set store activity data (from table1)
+        setStoreActivityData(transformDashboardData(table1 || []));
+      } else {
+        console.error("Dashboard data fetch failed:", dashboardResponse.error);
+        setErrorMessage(dashboardResponse.error || strings.genericError);
+      }
+    } catch (error) {
+      console.error("Dashboard data fetch error:", error);
+      setErrorMessage(strings.networkError || "Network error. Please check your connection and try again.");
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  };
+  
+  // Handle pull-to-refresh
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchDashboardData();
+  };
   
   // Handle logout
   const handleLogout = async () => {
@@ -127,7 +153,12 @@ const DashboardScreen = ({ navigation }) => {
   
   // Handle action button
   const handleAction = (item) => {
-    navigation.navigate('PerformActivity', { item });
+    // Pass store code and mediaPlanId to PerformActivity screen
+    navigation.navigate('PerformActivity', { 
+      item,
+      storeCode: userData?.storecode || null,
+      mediaPlanId: item.mediaPlanId || null
+    });
   };
   
   // Render list item
@@ -186,11 +217,32 @@ const DashboardScreen = ({ navigation }) => {
   const renderSeparator = () => <View style={styles.separator} />;
   
   // Render empty component
-  const renderEmptyComponent = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyText}>{strings.noDataAvailable}</Text>
-    </View>
-  );
+  const renderEmptyComponent = () => {
+    // Show different message based on loading state
+    if (isLoading) {
+      return null; // Loading indicator will be shown elsewhere
+    }
+    
+    if (errorMessage) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={fetchDashboardData}
+          >
+            <Text style={styles.retryButtonText}>{strings.retry || "Retry"}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>{strings.noDataAvailable || "No data available"}</Text>
+      </View>
+    );
+  };
   
   return (
     <View style={styles.container}>
@@ -206,7 +258,7 @@ const DashboardScreen = ({ navigation }) => {
       
       {userData && (
         <Text style={styles.welcomeMessage}>
-          Welcome, {userData.username || "User"}
+          Store Code, {userData.storecode || "N/A"}
         </Text>
       )}
       
@@ -231,50 +283,65 @@ const DashboardScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
       
+      {/* Loading indicator */}
+      {isLoading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>{strings.loading || "Loading..."}</Text>
+        </View>
+      )}
+      
       {/* List */}
       <FlatList
         data={paginatedData}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={[
+          styles.listContainer,
+          (!paginatedData || paginatedData.length === 0) && styles.emptyListContainer
+        ]}
         ItemSeparatorComponent={renderSeparator}
         ListEmptyComponent={renderEmptyComponent}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
       />
       
-      {/* Pagination */}
-      <View style={styles.paginationContainer}>
-        <TouchableOpacity
-          style={[
-            styles.paginationButton,
-            currentPage === 0 && styles.disabledButton
-          ]}
-          onPress={() => setCurrentPage(prev => Math.max(0, prev - 1))}
-          disabled={currentPage === 0}
-        >
-          <Text style={[
-            styles.paginationButtonText,
-            currentPage === 0 && styles.disabledButtonText
-          ]}>{strings.previous}</Text>
-        </TouchableOpacity>
-        
-        <Text style={styles.pageIndicator}>
-          {strings.page} {currentPage + 1} {strings.of} {maxPages}
-        </Text>
-        
-        <TouchableOpacity
-          style={[
-            styles.paginationButton,
-            currentPage >= maxPages - 1 && styles.disabledButton
-          ]}
-          onPress={() => setCurrentPage(prev => Math.min(maxPages - 1, prev + 1))}
-          disabled={currentPage >= maxPages - 1}
-        >
-          <Text style={[
-            styles.paginationButtonText,
-            currentPage >= maxPages - 1 && styles.disabledButtonText
-          ]}>{strings.next}</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Pagination - only show if we have data and not loading */}
+      {!isLoading && currentData.length > 0 && (
+        <View style={styles.paginationContainer}>
+          <TouchableOpacity
+            style={[
+              styles.paginationButton,
+              currentPage === 0 && styles.disabledButton
+            ]}
+            onPress={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+            disabled={currentPage === 0}
+          >
+            <Text style={[
+              styles.paginationButtonText,
+              currentPage === 0 && styles.disabledButtonText
+            ]}>{strings.previous || "Previous"}</Text>
+          </TouchableOpacity>
+          
+          <Text style={styles.pageIndicator}>
+            {strings.page || "Page"} {currentPage + 1} {strings.of || "of"} {maxPages}
+          </Text>
+          
+          <TouchableOpacity
+            style={[
+              styles.paginationButton,
+              currentPage >= maxPages - 1 && styles.disabledButton
+            ]}
+            onPress={() => setCurrentPage(prev => Math.min(maxPages - 1, prev + 1))}
+            disabled={currentPage >= maxPages - 1}
+          >
+            <Text style={[
+              styles.paginationButtonText,
+              currentPage >= maxPages - 1 && styles.disabledButtonText
+            ]}>{strings.next || "Next"}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -342,6 +409,11 @@ const styles = StyleSheet.create({
   listContainer: {
     flexGrow: 1,
   },
+  emptyListContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   itemContainer: {
     borderRadius: 8,
     backgroundColor: colors.white,
@@ -407,13 +479,48 @@ const styles = StyleSheet.create({
   separator: {
     height: 8,
   },
-  emptyContainer: {
-    paddingVertical: 20,
+  loadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    zIndex: 1,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: colors.primary,
+  },
+  emptyContainer: {
+    flex: 1,
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyText: {
     color: colors.grey,
     fontSize: 16,
+  },
+  errorText: {
+    color: colors.error || 'red',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+  },
+  retryButtonText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '500',
   },
   paginationContainer: {
     flexDirection: 'row',
