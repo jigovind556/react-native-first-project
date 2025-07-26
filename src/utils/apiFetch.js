@@ -41,6 +41,7 @@ export const apiFetch = async (endpoint, options = {}, requiresAuth = true) => {
     // Construct full URL
     const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
 
+    console.log("url:",url);
     // Make the request with updated options
     const response = await fetch(url, {
       ...options,

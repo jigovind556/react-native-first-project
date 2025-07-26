@@ -12,12 +12,15 @@ import {
   Platform,
   PermissionsAndroid,
 } from 'react-native';
+import ImageView from "react-native-image-viewing";
 import DropDownPicker from 'react-native-dropdown-picker';
 import Geolocation from 'react-native-geolocation-service';
 import colors from '../constants/colors';
 import strings from '../constants/strings';
+import config from '../constants/config';
 import ImagePickerModal from '../components/ImagePickerModal';
 import { submitEvidence } from '../services/fakeEvidenceApi';
+import { processImagesWithWatermark } from '../utils/imageWatermark';
 
 const EvidenceTagsScreen = ({ navigation, route }) => {
   const { item, storeCode, mediaPlanId } = route.params || {};
@@ -29,12 +32,16 @@ const EvidenceTagsScreen = ({ navigation, route }) => {
   
   const [isValidEvidence, setIsValidEvidence] = useState('');
   const [reason, setReason] = useState('');
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImages, setSelectedImages] = useState([]);
   const [imagePickerVisible, setImagePickerVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [location, setLocation] = useState(null);
   const [captureTime, setCaptureTime] = useState(null);
   const [locationError, setLocationError] = useState(null);
+  
+  // Image viewer states
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [imageViewerIndex, setImageViewerIndex] = useState(0);
   
   // DropDownPicker state variables
   const [openValidEvidenceDropdown, setOpenValidEvidenceDropdown] = useState(false);
@@ -83,35 +90,94 @@ const EvidenceTagsScreen = ({ navigation, route }) => {
     
     if (!hasPermission) {
       setLocationError('Location permission denied');
-      return;
+      return null;
     }
     
-    Geolocation.getCurrentPosition(
-      (position) => {
-        setLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-        });
-        setLocationError(null);
-      },
-      (error) => {
-        setLocationError(error.message);
-        console.log(error.code, error.message);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-    );
+    return new Promise((resolve) => {
+      Geolocation.getCurrentPosition(
+        (position) => {
+          const locationData = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          };
+          setLocation(locationData);
+          setLocationError(null);
+          resolve(locationData);
+        },
+        (error) => {
+          setLocationError(error.message);
+          console.log(error.code, error.message);
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+      );
+    });
   };
   
-  const handleImageSelect = (image) => {
-    setSelectedImage(image);
+  const handleImageSelect = async (images) => {
+    // Get max images limit from config
+    const maxImages = config.maxImagesAllowed;
     
     // Set capture time
     const now = new Date();
     setCaptureTime(now);
     
-    // Get location when an image is selected
-    getCurrentLocation();
+    // Get location when images are selected
+    await getCurrentLocation();
+    
+    // When adding more images, combine with existing ones
+    let updatedImages;
+    
+    if (selectedImages.length > 0) {
+      // We're adding more images to existing ones
+      updatedImages = [...selectedImages, ...images];
+      
+      // Ensure we don't exceed the limit
+      if (updatedImages.length > maxImages) {
+        updatedImages = updatedImages.slice(0, maxImages);
+        Alert.alert('Limit Reached', `Maximum ${maxImages} images are allowed. Only the first ${maxImages} images have been kept.`);
+      }
+    } else {
+      // First time adding images
+      updatedImages = images.length > maxImages ? images.slice(0, maxImages) : images;
+      if (images.length > maxImages) {
+        Alert.alert('Limit Reached', `Maximum ${maxImages} images are allowed. Only the first ${maxImages} images have been selected.`);
+      }
+    }
+    
+    // Show loading indicator
+    setIsSubmitting(true);
+    
+    try {
+      // Process images with watermark
+      const processedImages = await processImagesWithWatermark(
+        // Only process the newly added images
+        selectedImages.length > 0 ? images : updatedImages,
+        location,
+        now
+      );
+      
+      // Combine processed images with existing ones
+      let finalImages;
+      if (selectedImages.length > 0) {
+        finalImages = [...selectedImages, ...processedImages];
+        // Ensure we don't exceed the limit
+        if (finalImages.length > maxImages) {
+          finalImages = finalImages.slice(0, maxImages);
+        }
+      } else {
+        finalImages = processedImages;
+      }
+      
+      setSelectedImages(finalImages);
+    } catch (error) {
+      console.error('Error processing images:', error);
+      Alert.alert('Error', 'Failed to process images with watermark. Using original images instead.');
+      setSelectedImages(updatedImages);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   const handleSubmit = async () => {
@@ -121,8 +187,8 @@ const EvidenceTagsScreen = ({ navigation, route }) => {
       return;
     }
     
-    if (isValidEvidence === 'Yes' && !selectedImage) {
-      Alert.alert('Error', 'Please capture or select an image');
+    if (isValidEvidence === 'Yes' && selectedImages.length === 0) {
+      Alert.alert('Error', 'Please capture or select at least one image');
       return;
     }
     
@@ -142,9 +208,11 @@ const EvidenceTagsScreen = ({ navigation, route }) => {
       capturedAt: captureTime ? captureTime.toISOString() : new Date().toISOString(),
       submittedAt: new Date().toISOString(),
       ...(isValidEvidence === 'Yes' && {
-        imageUri: selectedImage.uri,
-        imageType: selectedImage.type,
-        imageName: selectedImage.fileName || `image_${Date.now()}.jpg`,
+        images: selectedImages.map((img, index) => ({
+          imageUri: img.uri,
+          imageType: img.type,
+          imageName: img.fileName || `image_${Date.now()}_${index}.jpg`,
+        })),
         location: location || { latitude: null, longitude: null, accuracy: null },
       }),
       ...(isValidEvidence === 'No' && {
@@ -217,26 +285,102 @@ const EvidenceTagsScreen = ({ navigation, route }) => {
             {isValidEvidence === 'Yes' && (
               <View style={styles.imageSection}>
                 <View style={styles.imageButtonsRow}>
-                  <TouchableOpacity
-                    style={styles.imageButton}
-                    onPress={() => setImagePickerVisible(true)}
-                  >
-                    <Text style={styles.imageButtonText}>
-                      {selectedImage ? 'Change Image' : 'Select Image'}
-                    </Text>
-                  </TouchableOpacity>
+                  {selectedImages.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.imageButton}
+                      onPress={() => setImagePickerVisible(true)}
+                    >
+                      <Text style={styles.imageButtonText}>Change Images</Text>
+                    </TouchableOpacity>
+                  )}
+                  
+                  {(selectedImages.length === 0 || selectedImages.length < config.maxImagesAllowed) && (
+                    <TouchableOpacity
+                      style={[styles.imageButton, selectedImages.length > 0 && styles.addMoreButton]}
+                      onPress={() => setImagePickerVisible(true)}
+                    >
+                      <Text style={styles.imageButtonText}>
+                        {selectedImages.length === 0 ? 'Select Images' : 'Add More Images'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
                 
-                {selectedImage && (
-                  <View style={styles.imagePreviewContainer}>
-                    <Image
-                      source={{ uri: selectedImage.uri }}
-                      style={styles.imagePreview}
-                      resizeMode="cover"
-                    />
-                    <Text style={styles.imageInfoText} numberOfLines={1}>
-                      {selectedImage.fileName || 'Image selected'}
-                    </Text>
+                <Text style={styles.imageNotesText}>
+                  Note: .jpg, .jpeg, .png File formats are allowed and file size less than 6 MB are allowed.
+                </Text>
+                
+                {isSubmitting && (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={styles.loadingText}>Processing images with watermark...</Text>
+                  </View>
+                )}
+                
+                {selectedImages.length > 0 && (
+                  <View>
+                    <View style={styles.imagesStatusContainer}>
+                      <Text style={styles.imagesCountText}>
+                        {selectedImages.length} {selectedImages.length === 1 ? 'image' : 'images'} selected 
+                        (Maximum {config.maxImagesAllowed})
+                      </Text>
+                      {selectedImages.some(img => img.watermarked) && (
+                        <Text style={styles.watermarkInfoText}>Images include date/time and location watermarks</Text>
+                      )}
+                    </View>
+                    <View style={styles.imageGridContainer}>
+                      {selectedImages.map((image, index) => (
+                        <View key={`${image.uri}_${index}`} style={styles.imagePreviewContainer}>
+                          <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => {
+                              setImageViewerIndex(index);
+                              setImageViewerVisible(true);
+                            }}
+                          >
+                            <View style={styles.imageWrapper}>
+                              <Image
+                                source={{ uri: image.uri }}
+                                style={styles.imagePreview}
+                                resizeMode="cover"
+                              />
+                              {image.watermarked && (
+                                <View style={styles.watermarkIndicator}>
+                                  <Text style={styles.watermarkIndicatorText}>W</Text>
+                                </View>
+                              )}
+                              <TouchableOpacity
+                                style={styles.removeImageButton}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  const newImages = [...selectedImages];
+                                  newImages.splice(index, 1);
+                                  setSelectedImages(newImages);
+                                }}
+                              >
+                                <Text style={styles.removeImageText}>✕</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </TouchableOpacity>
+                          <Text style={styles.imageInfoText} numberOfLines={1}>
+                            {`Image ${index + 1}`}
+                          </Text>
+                        </View>
+                      ))}
+                      
+                      {/* Add an "Add Image" button directly in the grid if fewer than max allowed images */}
+                      {selectedImages.length < config.maxImagesAllowed && (
+                        <TouchableOpacity 
+                          style={[styles.imagePreviewContainer, styles.addImageContainer]}
+                          onPress={() => setImagePickerVisible(true)}
+                        >
+                          <View style={[styles.imageWrapper, styles.addImageWrapper]}>
+                            <Text style={styles.addImageIcon}>+</Text>
+                            <Text style={styles.addImageText}>Add Image</Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                     
                     {/* Location and Date/Time Information */}
                     <View style={styles.metadataContainer}>
@@ -320,6 +464,36 @@ const EvidenceTagsScreen = ({ navigation, route }) => {
             visible={imagePickerVisible}
             onClose={() => setImagePickerVisible(false)}
             onImageSelect={handleImageSelect}
+            currentCount={selectedImages.length}
+          />
+
+          {/* Full Screen Image Viewer */}
+          <ImageView
+            images={selectedImages.map(img => ({ uri: img.uri }))}
+            imageIndex={imageViewerIndex}
+            visible={imageViewerVisible}
+            onRequestClose={() => setImageViewerVisible(false)}
+            presentationStyle="fullScreen"
+            swipeToCloseEnabled={true}
+            FooterComponent={({ imageIndex }) => (
+              <View style={styles.imageViewerFooter}>
+                {selectedImages[imageIndex]?.watermarked && (
+                  <View style={styles.imageViewerMetadata}>
+                    <Text style={styles.imageViewerMetadataText}>
+                      {captureTime ? captureTime.toLocaleString() : 'Unknown Time'}
+                    </Text>
+                    {location && (
+                      <Text style={styles.imageViewerMetadataText}>
+                        Location: {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                      </Text>
+                    )}
+                  </View>
+                )}
+                <Text style={styles.imageViewerCounter}>
+                  {imageIndex + 1} / {selectedImages.length}
+                </Text>
+              </View>
+            )}
           />
         </View>
       </ScrollView>
@@ -407,24 +581,148 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     margin: 8,
   },
+  addMoreButton: {
+    backgroundColor: colors.primary,
+  },
   imageButtonText: {
     color: colors.white,
     fontSize: 14,
     fontWeight: '500',
   },
+  imageGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    marginVertical: 10,
+  },
   imagePreviewContainer: {
     alignItems: 'center',
+    marginBottom: 16,
+    width: '31%', // For 3 images per row with margin
+    marginHorizontal: '1%',
+  },
+  imageWrapper: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 1,
+    marginBottom: 4,
   },
   imagePreview: {
-    width: 200,
-    height: 200,
+    width: '100%',
+    height: '100%',
     borderRadius: 8,
-    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.lightGrey,
   },
   imageInfoText: {
     fontSize: 12,
     color: colors.grey,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  imagesStatusContainer: {
+    alignItems: 'center',
     marginBottom: 8,
+  },
+  imagesCountText: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: colors.secondary,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  watermarkInfoText: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: colors.primary,
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  imageNotesText: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: colors.grey,
+    marginBottom: 12,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 16,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    padding: 10,
+    borderRadius: 8,
+  },
+  loadingText: {
+    marginLeft: 10,
+    color: colors.primary,
+    fontSize: 14,
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: colors.error,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 1,
+    elevation: 2,
+  },
+  removeImageText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  watermarkIndicator: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: colors.primary,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 1,
+    elevation: 2,
+  },
+  watermarkIndicatorText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  addImageContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addImageWrapper: {
+    borderWidth: 1,
+    borderColor: colors.grey,
+    borderStyle: 'dashed',
+    backgroundColor: colors.lightGrey,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addImageIcon: {
+    fontSize: 32,
+    color: colors.grey,
+    marginBottom: 8,
+  },
+  addImageText: {
+    fontSize: 12,
+    color: colors.grey,
+    textAlign: 'center',
   },
   metadataContainer: {
     width: '100%',
@@ -433,7 +731,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 8,
     marginBottom: 16,
-    alignSelf: 'stretch',
+    alignSelf: 'center',
     maxWidth: 300,
   },
   metadataTitle: {
@@ -482,6 +780,27 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: colors.primary,
     fontSize: 16,
+  },
+  // Image viewer styles
+  imageViewerFooter: {
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 16,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 16,
+    width: '100%',
+  },
+  imageViewerMetadata: {
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  imageViewerMetadataText: {
+    color: colors.white,
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  imageViewerCounter: {
+    color: colors.white,
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 

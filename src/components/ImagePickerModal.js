@@ -13,8 +13,9 @@ import {
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import colors from '../constants/colors';
 import strings from '../constants/strings';
+import config from '../constants/config';
 
-const ImagePickerModal = ({ visible, onClose, onImageSelect }) => {
+const ImagePickerModal = ({ visible, onClose, onImageSelect, currentCount = 0 }) => {
   const [hasCameraPermission, setHasCameraPermission] = useState(false);
   const [hasStoragePermission, setHasStoragePermission] = useState(false);
 
@@ -25,6 +26,7 @@ const ImagePickerModal = ({ visible, onClose, onImageSelect }) => {
     maxHeight: 800,
     includeBase64: false,
     saveToPhotos: false,
+    selectionLimit: 1, // Default to 1 for camera
   };
   
   // Check permissions when component mounts and when modal becomes visible
@@ -135,7 +137,13 @@ const ImagePickerModal = ({ visible, onClose, onImageSelect }) => {
         return;
       }
       
-      const result = await launchCamera(options);
+      // Camera only takes one photo at a time
+      const cameraOptions = {
+        ...options,
+        selectionLimit: 1,
+      };
+      
+      const result = await launchCamera(cameraOptions);
       
       if (result.didCancel) {
         console.log('User cancelled taking a photo');
@@ -158,10 +166,13 @@ const ImagePickerModal = ({ visible, onClose, onImageSelect }) => {
           Alert.alert("Error", `Camera error: ${result.errorMessage}`);
         }
       } else if (result.assets && result.assets.length > 0) {
-        const image = result.assets[0];
-        // Add timestamp to the image data
-        image.timestamp = new Date();
-        onImageSelect(image);
+        // Wrap the single image in an array for consistent handling with gallery selection
+        const images = result.assets.map(image => ({
+          ...image,
+          timestamp: new Date()
+        }));
+        
+        onImageSelect(images);
         onClose();
       }
     } catch (error) {
@@ -224,8 +235,18 @@ const ImagePickerModal = ({ visible, onClose, onImageSelect }) => {
         );
         return;
       }
+      
+      // Update options for multiple selection (up to maxImagesAllowed total)
+      const maxImages = config.maxImagesAllowed;
+      const remainingSlots = maxImages - currentCount;
+      const galleryOptions = {
+        ...options,
+        selectionLimit: Math.max(1, remainingSlots), // Allow selection up to remaining slots, min 1
+        mediaType: 'photo', 
+        includeBase64: false,
+      };
 
-      const result = await launchImageLibrary(options);
+      const result = await launchImageLibrary(galleryOptions);
       
       if (result.didCancel) {
         console.log('User cancelled image picker');
@@ -245,10 +266,13 @@ const ImagePickerModal = ({ visible, onClose, onImageSelect }) => {
           Alert.alert("Error", `Gallery error: ${result.errorMessage}`);
         }
       } else if (result.assets && result.assets.length > 0) {
-        const image = result.assets[0];
-        // Add timestamp to the image data
-        image.timestamp = new Date();
-        onImageSelect(image);
+        // Add timestamp to each image
+        const images = result.assets.map(image => ({
+          ...image,
+          timestamp: new Date()
+        }));
+        
+        onImageSelect(images);
         onClose();
       }
     } catch (error) {
