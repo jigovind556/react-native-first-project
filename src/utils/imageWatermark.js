@@ -1,4 +1,3 @@
-// import ImageMarker from 'react-native-image-marker';
 import { Platform } from 'react-native';
 
 // Position constants for watermark positioning
@@ -75,77 +74,9 @@ export const addWatermark = async (imageObject, location, timestamp) => {
       
     console.log('Using normalized image URI:', normalizedUri);
 
-    // Configure watermark options based on the updated API
-    // const markOptions = {
-    //   backgroundImage: {
-    //     src: normalizedUri,
-    //     scale: 1,
-    //   },
-    //   watermarkTexts: [
-    //     {
-    //       text: watermarkText,
-    //       positionOptions: {
-    //         position: Position.bottomLeft,
-    //         X: 30,
-    //         Y: 50,
-    //       },
-    //       style: {
-    //         color: '#FFFFFF',
-    //         fontSize: 36,
-    //         fontName: Platform.OS === 'ios' ? 'Helvetica' : 'Roboto',
-    //         textBackgroundStyle: {
-    //           paddingX: 12,
-    //           paddingY: 10,
-    //           type: TextBackgroundType.stretchX,
-    //           color: 'rgba(0, 0, 0, 0.7)'
-    //         },
-    //       }
-    //     }
-    //   ],
-    //   scale: 1,
-    //   quality: 100,
-    //   saveFormat: 'png'
-    // };
+    // Add watermark to image
+
     
-    // console.log('Applying watermark with options:', {
-    //   ...markOptions,
-    //   backgroundImage: {
-    //     ...markOptions.backgroundImage,
-    //     src: typeof markOptions.backgroundImage.src === 'string' 
-    //       ? markOptions.backgroundImage.src.substring(0, 30) + '...' 
-    //       : 'Resource object'
-    //   }
-    // });
-    
-    // try {
-      // Apply watermark using ImageMarker
-    //   const result = await ImageMarker.markText(markOptions);
-      
-    //   console.log('Watermark applied successfully, result:', result ? result.substring(0, 30) + '...' : 'null');
-      
-    //   // Return the watermarked image with original metadata
-    //   return {
-    //     ...imageObject,
-    //     uri: result,
-    //     watermarked: true,
-    //     watermarkInfo: {
-    //       datetime: dateTimeStr,
-    //       location: locationStr
-    //     }
-    //   };
-    // } catch (innerError) {
-    //   console.error('Error in ImageMarker.markText:', innerError);
-    //   throw innerError; // Re-throw to outer catch
-    // }
-  // } catch (error) {
-  //   console.error('Error adding watermark:', error);
-  //   console.log('Failed image object:', JSON.stringify({
-  //     ...imageObject,
-  //     uri: imageObject.uri ? imageObject.uri.substring(0, 30) + '...' : null
-  //   }, null, 2));
-  //   // If watermarking fails, return original image
-  //   return imageObject;
-  // }
 };
 
 /**

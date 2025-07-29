@@ -55,7 +55,7 @@ export const transformDashboardData = (apiData) => {
   if (!apiData || !Array.isArray(apiData)) return [];
   
   return apiData.map((item, index) => ({
-    id: item.id || `item-${index + 1}`,
+    id: item.elementid || `item-${index + 1}`,
     elementName: item.element_name || `Element-${index + 1}`,
     subTypeName: item.subtype_name || 'Unknown Type',
     brandName: item.brandname || 'Unknown Brand',
@@ -63,6 +63,11 @@ export const transformDashboardData = (apiData) => {
     planName: item.mediaplanname || `Plan-${index + 1}`,
     planEndDate: item.enddate || 'N/A',
     mediaPlanId: item.mediaPlanId || null,
-    storeCode: item.storecode || null,  
+    storeCode: item.storecode || null,
+    executiontemplateid: item.executiontemplateid,
+    storecode:item.storecode,
+    storeid:item.storeid,
+    storename:item.storename,
+    taskid:item.taskid,
   }));
 };

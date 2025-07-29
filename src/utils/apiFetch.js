@@ -38,10 +38,42 @@ export const apiFetch = async (endpoint, options = {}, requiresAuth = true) => {
       }
     }
 
-    // Construct full URL
-    const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
-
-    console.log("url:",url);
+    // Construct full URL, handling relative paths with ../
+    let baseUrl = API_BASE_URL;
+    let processedEndpoint = endpoint;
+    
+    // Handle relative paths with ../ in the endpoint
+    if (endpoint.includes('../')) {
+      const baseUrlParts = API_BASE_URL.endsWith('/') 
+        ? API_BASE_URL.slice(0, -1).split('/')
+        : API_BASE_URL.split('/');
+      
+      // Count and process the ../ occurrences
+      while (processedEndpoint.startsWith('../')) {
+        // Remove a segment from baseUrl for each ../
+        if (baseUrlParts.length > 3) { // Keep at least http(s)://domain
+          baseUrlParts.pop();
+        }
+        // Remove the ../ from the endpoint
+        processedEndpoint = processedEndpoint.substring(3);
+      }
+      
+      // Reconstruct the base URL
+      baseUrl = baseUrlParts.join('/');
+      
+      // Ensure baseUrl ends with a slash unless it's just a domain
+      if (!baseUrl.endsWith('/') && baseUrlParts.length >= 3) {
+        baseUrl += '/';
+      }
+    }
+    
+    // Add a leading slash to the endpoint if it doesn't have one and doesn't start with ../
+    if (!processedEndpoint.startsWith('/') && !endpoint.includes('../')) {
+      processedEndpoint = '/' + processedEndpoint;
+    }
+    
+    const url = `${baseUrl}${processedEndpoint}`;
+    console.log("url:", url);
     // Make the request with updated options
     const response = await fetch(url, {
       ...options,
@@ -54,14 +86,52 @@ export const apiFetch = async (endpoint, options = {}, requiresAuth = true) => {
       return { success: true };
     }
 
-    // Parse response
-    const data = await response.json();
+    // Check if response is JSON by examining the content type header
+    const contentType = response.headers.get('content-type');
+    let data;
 
-    // Handle error status codes
+    if (contentType && contentType.includes('application/json')) {
+      // Parse JSON response
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('Error parsing JSON response:', parseError);
+        // Attempt to get text and provide it as raw response
+        const textResponse = await response.text();
+        return {
+          success: false,
+          error: 'Invalid JSON response',
+          statusCode: response.status,
+          rawResponse: textResponse.substring(0, 1000), // Truncate large responses
+        };
+      }
+    } else {
+      // Handle non-JSON responses (HTML, text, etc.)
+      try {
+        const textResponse = await response.text();
+        
+        return {
+          success: response.ok,
+          statusCode: response.status,
+          rawResponse: textResponse.substring(0, 1000), // Truncate large responses
+          contentType: contentType || 'unknown',
+          isTextResponse: true
+        };
+      } catch (textError) {
+        console.error('Error reading response as text:', textError);
+        return {
+          success: false,
+          error: 'Unable to read response',
+          statusCode: response.status
+        };
+      }
+    }
+    
+    // Handle error status codes for JSON responses
     if (!response.ok) {
       return {
         success: false,
-        error: data.message || `Error: ${response.status} ${response.statusText}`,
+        error: data?.message || `Error: ${response.status} ${response.statusText}`,
         statusCode: response.status,
         data,
       };

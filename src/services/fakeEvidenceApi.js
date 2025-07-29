@@ -27,6 +27,48 @@ export const submitEvidence = async (evidenceData) => {
 };
 
 /**
+ * Submit form data to the PlanDetails/FillForm API
+ * 
+ * @param {Object} formData - The form data to submit
+ * @returns {Promise} - Resolves with response data
+ */
+export const submitFormData = async (formData) => {
+  try {
+    const response = await apiFetch('PlanDetails/FillForm', {
+      method: 'POST',
+      body: JSON.stringify(formData),
+    });
+    
+    console.log("fill form response:", response);
+    
+    // Handle non-JSON responses
+    if (response.isTextResponse) {
+      // Check if the raw text response indicates success
+      const isSuccess = 
+        response.success || 
+        (response.rawResponse && 
+          (response.rawResponse.toLowerCase().includes('success') || 
+           response.rawResponse.toLowerCase().includes('updated') ||
+           !response.rawResponse.toLowerCase().includes('error')));
+      
+      return {
+        success: isSuccess,
+        message: isSuccess ? 'Form submitted successfully' : 'Failed to submit form',
+        rawResponse: response.rawResponse
+      };
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('Form submission error:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to submit form data. Please try again.',
+    };
+  }
+};
+
+/**
  * Fetch evidence data from the API
  * 
  * @param {string} evidenceId - Optional ID to fetch specific evidence
@@ -82,6 +124,50 @@ export const uploadEvidenceFile = async (fileData, metadata = {}) => {
     return {
       success: false,
       error: 'Failed to upload evidence file. Please try again.',
+    };
+  }
+};
+
+/**
+ * Upload images to ImageUpload/ImageUpload API
+ * 
+ * @param {FormData} formData - Form data with images and metadata
+ * @returns {Promise} - Resolves with response data
+ */
+export const uploadImages = async (formData) => {
+  try {
+    const response = await apiFetch('../../UploadImage/UploadImage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      body: formData,
+    });
+    
+    console.log("Image upload response:", response);
+    
+    // Handle non-JSON responses
+    if (response.isTextResponse) {
+      // Check if the raw text response indicates success
+      const isSuccess = 
+        response.success || 
+        (response.rawResponse && 
+          (response.rawResponse.toLowerCase().includes('success') || 
+           response.rawResponse.toLowerCase().includes('uploaded')));
+      
+      return {
+        success: isSuccess,
+        message: isSuccess ? 'Images uploaded successfully' : 'Failed to upload images',
+        rawResponse: response.rawResponse
+      };
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('Image upload error:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to upload images. Please try again.',
     };
   }
 };

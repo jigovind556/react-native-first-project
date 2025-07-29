@@ -19,8 +19,11 @@ import colors from '../constants/colors';
 import strings from '../constants/strings';
 import config from '../constants/config';
 import ImagePickerModal from '../components/ImagePickerModal';
-import { submitEvidence } from '../services/fakeEvidenceApi';
+import { submitEvidence, submitFormData, uploadImages } from '../services/fakeEvidenceApi';
 import { processImagesWithWatermark } from '../utils/imageWatermark';
+import { apiFetch } from '../utils/apiFetch';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import RNFS from 'react-native-fs';
 
 const EvidenceTagsScreen = ({ navigation, route }) => {
   const { item, storeCode, mediaPlanId } = route.params || {};
@@ -51,10 +54,10 @@ const EvidenceTagsScreen = ({ navigation, route }) => {
     { label: 'No', value: 'No' }
   ]);
   const [reasonItems, setReasonItems] = useState([
-    { label: 'Element Fixture Not Ready', value: 'Element Fixture Not Ready' },
-    { label: 'Product Missing', value: 'Product Missing' },
-    { label: 'Space Not Available', value: 'Space Not Available' },
-    { label: 'Store Closed', value: 'Store Closed' },
+    { label: 'Element Fixture Not Received at Store', value: 'Element Fixture Not Received at Store' },
+    { label: 'Element Fixture in the Damaged Condition', value: 'Element Fixture in the Damaged Condition' },
+    { label: 'Stock not Available', value: 'Stock not Available' },
+    { label: 'Element Mismatch', value: 'Element Mismatch' },
     { label: 'Other', value: 'Other' }
   ]);
   
@@ -197,47 +200,114 @@ const EvidenceTagsScreen = ({ navigation, route }) => {
       return;
     }
     
-    // Prepare data for submission
-    const evidenceData = {
-      itemId: item.id,
-      brandName: item.brandName,
-      elementName: item.elementName,
-      storeCode,
-      mediaPlanId,
-      isValidEvidence,
-      capturedAt: captureTime ? captureTime.toISOString() : new Date().toISOString(),
-      submittedAt: new Date().toISOString(),
-      ...(isValidEvidence === 'Yes' && {
-        images: selectedImages.map((img, index) => ({
-          imageUri: img.uri,
-          imageType: img.type,
-          imageName: img.fileName || `image_${Date.now()}_${index}.jpg`,
-        })),
-        location: location || { latitude: null, longitude: null, accuracy: null },
-      }),
-      ...(isValidEvidence === 'No' && {
-        reason,
-      }),
-    };
-    
     setIsSubmitting(true);
     
     try {
-      const response = await submitEvidence(evidenceData);
+      // Step 1: Call PlanDetails/FillForm API for both "Yes" and "No" cases
+      const fillFormPayload = {
+        element_id: item.id,
+        evidence: isValidEvidence,
+        store_code: item.storecode,
+        taskid: item.taskid,
+        reason: isValidEvidence === 'Yes' ? 'NA' : reason
+      };
+      
+      console.log("fillform payload", fillFormPayload);
+      const fillFormResponse = await submitFormData(fillFormPayload);
+      
+      if (!fillFormResponse.success) {
+        throw new Error(fillFormResponse.error || 'Failed to submit form');
+      }
+      
+      // Get auth token for image upload
+      const token = await AsyncStorage.getItem('authToken') || "";
+      
+      // Step 2: If evidence is "Yes", upload images
+      if (isValidEvidence === 'Yes' && selectedImages.length > 0) {
+        // Create FormData for image upload
+        const formData = new FormData();
+        formData.append('plan', item.planName || '');
+        formData.append('elementid', item.id);
+        formData.append('store', storeCode);
+        formData.append('date', new Date().toISOString());
+        formData.append('task', item.taskid);
+        formData.append('executiontemplateid', item.executiontemplateid || '');
+        formData.append('tokenid', token);
+        
+        // Add location if available
+        if (location) {
+          formData.append('longitude', String(location.longitude || 0));
+          formData.append('latitude', String(location.latitude || 0));
+        } else {
+          formData.append('longitude', '0');
+          formData.append('latitude', '0');
+        }
+        
+        // Process images (max 5) and add to formData
+        const processedImages = selectedImages.slice(0, 5);
+        
+        // Process each image and convert to base64 if needed
+        await Promise.all(processedImages.map(async (img, i) => {
+          try {
+            // Convert image to base64 if not already in base64 format
+            let base64Data;
+            
+            if (img.base64) {
+              // Image already has base64 data
+              base64Data = img.base64;
+            } else if (img.uri.startsWith('data:image') && img.uri.includes('base64,')) {
+              // Image URI is already in base64 format, extract the data part
+              base64Data = img.uri.split('base64,')[1];
+            } else {
+              // Need to read the file and convert to base64
+              try {
+                // Handle file URI differently based on platform
+                const filePath = Platform.OS === 'ios' && !img.uri.startsWith('file:') 
+                  ? `file://${img.uri}` 
+                  : img.uri;
+                
+                // Read the file as base64
+                const base64Content = await RNFS.readFile(filePath, 'base64');
+                base64Data = base64Content;
+              } catch (readError) {
+                console.error(`Error reading image ${i+1}:`, readError);
+                // Fallback to the URI if reading fails
+                base64Data = img.uri;
+              }
+            }
+            
+            // Add the base64 data to the form
+            formData.append(`image${i+1}`, base64Data);
+          } catch (error) {
+            console.error(`Error processing image ${i+1}:`, error);
+            // If conversion fails, try to use whatever data we have
+            formData.append(`image${i+1}`, img.base64 || img.uri);
+          }
+        }));
+        
+        console.log("imageform payload", formData);
+        
+        // Upload images using service function
+        const imageUploadResponse = await uploadImages(formData);
+        
+        if (!imageUploadResponse.success) {
+          throw new Error(imageUploadResponse.error || 'Failed to upload images');
+        }
+      }
+      
       setIsSubmitting(false);
       
       Alert.alert(
         'Success', 
         strings.evidenceSubmitted,
-        [
-          { 
-            text: 'OK', 
-            onPress: () => navigation.navigate('Dashboard') 
-          }
-        ]
+        [{ 
+          text: 'OK', 
+          onPress: () => navigation.navigate('Dashboard') 
+        }]
       );
     } catch (error) {
       setIsSubmitting(false);
+      console.error('Submission error:', error);
       Alert.alert('Error', error.message || 'Failed to submit evidence');
     }
   };
