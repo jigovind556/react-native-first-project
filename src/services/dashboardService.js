@@ -62,7 +62,7 @@ export const transformDashboardData = (apiData) => {
     execution: item.executiontemplatename || 'Monthly',
     planName: item.mediaplanname || `Plan-${index + 1}`,
     planEndDate: item.enddate || 'N/A',
-    mediaPlanId: item.mediaPlanId || null,
+    mediaPlanId: item.mediaplanid || null,
     storeCode: item.storecode || null,
     executiontemplateid: item.executiontemplateid,
     storecode:item.storecode,

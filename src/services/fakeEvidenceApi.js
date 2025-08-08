@@ -136,7 +136,7 @@ export const uploadEvidenceFile = async (fileData, metadata = {}) => {
  */
 export const uploadImages = async (formData) => {
   try {
-    const response = await apiFetch('../../UploadImage/UploadImage', {
+    const response = await apiFetch('/ImgUpload/UploadImage', {
       method: 'POST',
       headers: {
         'Content-Type': 'multipart/form-data',

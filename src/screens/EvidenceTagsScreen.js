@@ -226,10 +226,10 @@ const EvidenceTagsScreen = ({ navigation, route }) => {
       if (isValidEvidence === 'Yes' && selectedImages.length > 0) {
         // Create FormData for image upload
         const formData = new FormData();
-        formData.append('plan', item.planName || '');
+        formData.append('plan', item.mediaPlanId || '');
         formData.append('elementid', item.id);
         formData.append('store', storeCode);
-        formData.append('date', new Date().toISOString());
+        formData.append('date', new Date().toISOString().split('T')[0]);
         formData.append('task', item.taskid);
         formData.append('executiontemplateid', item.executiontemplateid || '');
         formData.append('tokenid', token);
@@ -246,9 +246,11 @@ const EvidenceTagsScreen = ({ navigation, route }) => {
         // Process images (max 5) and add to formData
         const processedImages = selectedImages.slice(0, 5);
         
-        // Process each image and convert to base64 if needed
+        // Process each image and add to formData
         await Promise.all(processedImages.map(async (img, i) => {
           try {
+            // COMMENTED: Base64 conversion is no longer needed
+            /*
             // Convert image to base64 if not already in base64 format
             let base64Data;
             
@@ -278,10 +280,33 @@ const EvidenceTagsScreen = ({ navigation, route }) => {
             
             // Add the base64 data to the form
             formData.append(`image${i+1}`, base64Data);
+            */
+            
+            // Upload the image directly in FormData
+            // Create file object from URI
+            const imageUriParts = img.uri.split('/');
+            const imageName = imageUriParts[imageUriParts.length - 1];
+            const imageType = img.type || 'image/jpeg'; // Default to jpeg if type is not available
+            
+            // Append file to FormData directly
+            formData.append(`image${i+1}`, {
+              uri: img.uri,
+              type: imageType,
+              name: imageName
+            });
+            
+            console.log(`Added image ${i+1} to formData: ${imageName}`);
+            
           } catch (error) {
             console.error(`Error processing image ${i+1}:`, error);
-            // If conversion fails, try to use whatever data we have
-            formData.append(`image${i+1}`, img.base64 || img.uri);
+            // If processing fails, try to use whatever data we have
+            if (img.uri) {
+              formData.append(`image${i+1}`, {
+                uri: img.uri,
+                type: 'image/jpeg',
+                name: `image${i+1}.jpg`
+              });
+            }
           }
         }));
         
